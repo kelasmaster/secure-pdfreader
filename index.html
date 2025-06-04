@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Secure PDF Reader</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
+  <div class="container">
+    <h1>Secure PDF Reader</h1>
+    <div class="controls">
+      <button onclick="prevPage()">⬅️ Prev</button>
+      <span id="page-num">1</span> / <span id="page-count"></span>
+      <button onclick="nextPage()">Next ➡️</button>
+      <button onclick="zoomIn()">🔍 Zoom In</button>
+      <button onclick="zoomOut()">🔍 Zoom Out</button>
+    </div>
+    <canvas id="pdfViewer" class="pdf-canvas"></canvas>
+  </div>
+
+  <!-- PDF.js Library -->
+  <script src="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.min.js"></script> 
+  <script src="script.js"></script>
+</body>
+</html>
