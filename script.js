@@ -7,10 +7,11 @@ let pageRendering = false;
 let pageNumPending = null;
 let scale = 1.5;
 
-// Replace with your Google Drive direct link
+// Replace YOUR_FILE_ID with the one from your Google Drive link
 const url = "https://drive.google.com/uc?export=download&id=1o1XCi9MdPibBRPdpth80XjhiKfih8KlL";
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
+// Set up PDF.js worker
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
 
 function renderPage(num) {
   pageRendering = true;
@@ -18,6 +19,7 @@ function renderPage(num) {
   pdfDoc.getPage(num).then(page => {
     const viewport = page.getViewport({ scale });
 
+    // Set canvas dimensions
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
@@ -26,6 +28,7 @@ function renderPage(num) {
       viewport
     };
 
+    // Render the page
     page.render(renderContext);
 
     pageRendering = false;
@@ -33,6 +36,9 @@ function renderPage(num) {
       renderPage(pageNumPending);
       pageNumPending = null;
     }
+  }).catch(err => {
+    console.error("Failed to render page", err);
+    alert("Error rendering PDF page.");
   });
 }
 
@@ -70,9 +76,14 @@ function zoomOut() {
   }
 }
 
-// Load PDF
+// Load PDF Document
+console.log("Loading PDF from:", url);
 pdfjsLib.getDocument(url).promise.then(pdf => {
+  console.log("PDF loaded successfully", pdf);
   pdfDoc = pdf;
   document.getElementById("page-count").textContent = pdf.numPages;
   renderPage(pageNum);
+}).catch(err => {
+  console.error("Error loading PDF", err);
+  alert("Failed to load PDF. Check console for details.");
 });
