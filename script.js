@@ -7,8 +7,8 @@ let pageRendering = false;
 let pageNumPending = null;
 let scale = 1.5;
 
-// Replace with your secure external PDF URL
-const url = "https://drive.google.com/file/d/18SOyK3T_X9LWQbLoINPCxXPwuFV7b3f_/view?usp=drive_link"; 
+// Replace with your Google Drive direct link
+const url = "https://drive.google.com/uc?export=download&id=YOUR_FILE_ID_HERE";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
 
