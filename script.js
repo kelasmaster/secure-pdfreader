@@ -8,7 +8,8 @@ let pageNumPending = null;
 let scale = 1.5;
 
 // Replace YOUR_FILE_ID with the one from your Google Drive link
-const url = "https://drive.google.com/uc?export=download&id=1o1XCi9MdPibBRPdpth80XjhiKfih8KlL";
+<!-- const url = "https://drive.google.com/uc?export=download&id=1o1XCi9MdPibBRPdpth80XjhiKfih8KlL"; -->
+const url = "https://corsproxy.io/?https://drive.google.com/uc%3Fexport%3Ddownload%26id%3D1o1XCi9MdPibBRPdpth80XjhiKfih8KlL";
 
 // Set up PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
