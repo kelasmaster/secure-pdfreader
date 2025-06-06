@@ -7,7 +7,7 @@ let pageRendering = false;
 let pageNumPending = null;
 let scale = 1.5;
 
-// Your direct PDF URL from Uploadfiles.io
+// Your Uploadfiles.io PDF link
 const url = "https://ufile.io/3flwkgvw"; 
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
@@ -73,14 +73,23 @@ function zoomOut() {
   }
 }
 
-// Load PDF Document
-console.log("Loading PDF...");
-pdfjsLib.getDocument(url).promise.then(pdf => {
-  console.log("🎉 PDF loaded successfully!", pdf);
-  pdfDoc = pdf;
-  document.getElementById("page-count").textContent = pdf.numPages;
-  renderPage(pageNum);
-}).catch(err => {
-  console.error("🛑 Failed to load PDF:", err);
-  alert("Could not load PDF. Check console for details.");
-});
+// Load PDF via proxy
+async function loadPDF() {
+  const proxyUrl = 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+
+  console.log("Trying to load PDF via proxy:", proxyUrl);
+
+  try {
+    const loadingTask = pdfjsLib.getDocument(proxyUrl);
+    const pdf = await loadingTask.promise;
+    console.log("🎉 PDF loaded successfully!", pdf);
+    pdfDoc = pdf;
+    document.getElementById("page-count").textContent = pdf.numPages;
+    renderPage(pageNum);
+  } catch (err) {
+    console.error("🛑 Failed to load PDF:", err);
+    alert("Could not load PDF. Check console for details.");
+  }
+}
+
+loadPDF();
