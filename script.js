@@ -7,12 +7,10 @@ let pageRendering = false;
 let pageNumPending = null;
 let scale = 1.5;
 
-// Replace YOUR_FILE_ID with the one from your Google Drive link
-<!-- const url = "https://drive.google.com/uc?export=download&id=1o1XCi9MdPibBRPdpth80XjhiKfih8KlL"; -->
-const url = "https://corsproxy.io/?https://drive.google.com/uc%3Fexport%3Ddownload%26id%3D1o1XCi9MdPibBRPdpth80XjhiKfih8KlL";
+// Replace with your MediaFire or any direct .pdf link
+const url = "‎https://www.mediafire.com/file/ryfptbe2y4kmnsj/125_Contekan_Iklan.pdf"; 
 
-// Set up PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
+pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
 
 function renderPage(num) {
   pageRendering = true;
@@ -20,7 +18,6 @@ function renderPage(num) {
   pdfDoc.getPage(num).then(page => {
     const viewport = page.getViewport({ scale });
 
-    // Set canvas dimensions
     canvas.height = viewport.height;
     canvas.width = viewport.width;
 
@@ -29,7 +26,6 @@ function renderPage(num) {
       viewport
     };
 
-    // Render the page
     page.render(renderContext);
 
     pageRendering = false;
