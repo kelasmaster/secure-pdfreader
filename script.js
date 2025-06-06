@@ -7,11 +7,8 @@ let pageRendering = false;
 let pageNumPending = null;
 let scale = 1.5;
 
-// 🔗 Direct PDF URL from MediaFire
-const url = "https://download1587.mediafire.com/znnj0q6vlwhg-fFrNJticmWs_OtYAdvxJeRu4XUB5qAoMnm35UIt6A1fPZ_aYr-x4wSJYp5EMR1q_u74M3vSUwNT3AjrpAJQI-KoFEOgVrKyYeJt-ru8xVvkPGM569nRSfgWCsC4EmSnEse_XxuEDqEOfI0H_wCLAjkjMfgXWpNk13k/ryfptbe2y4kmnsj/125+Contekan+Iklan.pdf"; 
-
-// Optional: use CORS proxy if browser blocks direct access
-const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+// Use local test PDF
+const url = "test.pdf";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
 
@@ -77,34 +74,13 @@ function zoomOut() {
 }
 
 // Load PDF Document
-console.log("Attempting to load PDF...");
-
-fetch(url)
-  .then(res => {
-    if (res.ok) {
-      console.log("✅ File is accessible via direct fetch.");
-      startPDFViewer(url);
-    } else {
-      console.warn("❌ Direct fetch failed. Trying CORS proxy...");
-      startPDFViewer(proxyUrl);
-    }
-  })
-  .catch(err => {
-    console.warn("🌐 Network issue or CORS blocked. Using proxy:", err);
-    startPDFViewer(proxyUrl);
-  });
-
-function startPDFViewer(pdfUrl) {
-  console.log("Loading PDF via:", pdfUrl);
-
-  const loadingTask = pdfjsLib.getDocument(pdfUrl);
-  loadingTask.promise.then(pdf => {
-    console.log("🎉 PDF loaded successfully!", pdf);
-    pdfDoc = pdf;
-    document.getElementById("page-count").textContent = pdf.numPages;
-    renderPage(pageNum);
-  }).catch(err => {
-    console.error("🛑 Failed to load PDF:", err);
-    alert("Could not load PDF. Check console for details.");
-  });
-}
+console.log("Loading PDF...");
+pdfjsLib.getDocument(url).promise.then(pdf => {
+  console.log("🎉 PDF loaded successfully!", pdf);
+  pdfDoc = pdf;
+  document.getElementById("page-count").textContent = pdf.numPages;
+  renderPage(pageNum);
+}).catch(err => {
+  console.error("🛑 Failed to load PDF:", err);
+  alert("Could not load PDF. Check console for details.");
+});
