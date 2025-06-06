@@ -8,7 +8,7 @@ let pageNumPending = null;
 let scale = 1.5;
 
 // Use local test PDF
-const url = "test.pdf";
+const url = "contekan-iklan.pdf";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
 
