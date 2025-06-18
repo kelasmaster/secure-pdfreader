@@ -10,7 +10,6 @@
       background-color: #111;
       color: white;
       user-select: none;
-      -webkit-user-select: none;
       overflow: hidden;
     }
 
@@ -151,7 +150,7 @@
       alert("Could not load PDF. Check console for details.");
     });
 
-    // Prevent screenshot shortcuts
+    // Disable common screenshot shortcuts
     document.addEventListener('keydown', function(e) {
       if ((e.ctrlKey || e.metaKey) && ['s', 'p', 'c'].includes(e.key.toLowerCase())) {
         e.preventDefault();
@@ -163,7 +162,7 @@
       }
     });
 
-    // Optional: Hide cursor after delay
+    // Hide cursor after delay
     let hideCursorTimeout;
     canvas.addEventListener("mousemove", () => {
       canvas.style.cursor = "default";
@@ -172,6 +171,20 @@
         canvas.style.cursor = "none";
       }, 1000);
     });
+
+    // Optional: Detect screen capture (limited support)
+    async function detectScreenCapture() {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        alert("⚠️ Screen recording detected!");
+        stream.getTracks().forEach(track => track.stop());
+      } catch (err) {
+        // User denied or no capture active
+      }
+    }
+
+    // Run detection every few seconds
+    setInterval(detectScreenCapture, 5000);
   </script>
 </body>
 </html>
