@@ -3,40 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Protected PDF Reader</title>
+  <title>Protected PDF Viewer</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
-      background-color: #222;
+      font-family: Arial, sans-serif;
+      background-color: #111;
       user-select: none;
       -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
       overflow: hidden;
     }
-    .container {
+    #app-container {
       position: relative;
       width: 100vw;
       height: 100vh;
-      overflow: hidden;
     }
-    .pdf-container {
+    #pdf-container {
       position: absolute;
-      top: 60px;
+      top: 50px;
       bottom: 0;
       left: 0;
       right: 0;
       overflow: auto;
-      background-color: #444;
+      background-color: #222;
     }
-    .controls {
+    #controls {
       position: fixed;
       top: 0;
       left: 0;
       right: 0;
-      height: 60px;
+      height: 50px;
       background-color: #333;
       display: flex;
       justify-content: center;
@@ -51,23 +48,16 @@
       border: none;
       border-radius: 4px;
       cursor: pointer;
-      font-size: 14px;
     }
-    button:hover {
-      background: #3367d6;
-    }
-    .page-info {
-      color: white;
-      font-weight: bold;
-      margin: 0 15px;
+    #canvas-container {
+      position: relative;
+      margin: 20px auto;
     }
     canvas {
       display: block;
-      margin: 20px auto;
-      box-shadow: 0 0 10px rgba(0,0,0,0.5);
       background-color: white;
     }
-    .protection-overlay {
+    #dynamic-overlay {
       position: fixed;
       top: 0;
       left: 0;
@@ -75,237 +65,218 @@
       height: 100%;
       pointer-events: none;
       z-index: 50;
-      background: rgba(0,0,0,0.5);
-      display: none;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,0.03),
+        rgba(255,255,255,0.03) 1px,
+        transparent 1px,
+        transparent 3px
+      );
+      animation: flicker 0.1s infinite;
+    }
+    @keyframes flicker {
+      0% { opacity: 0.9; }
+      50% { opacity: 1; }
+      100% { opacity: 0.9; }
     }
     .watermark {
       position: absolute;
-      color: white;
+      color: rgba(255,0,0,0.5);
       font-size: 24px;
-      opacity: 0.7;
+      font-weight: bold;
       pointer-events: none;
       z-index: 60;
+      text-shadow: 1px 1px 1px #000;
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="controls">
-      <button onclick="prevPage()">⬅️ Prev</button>
-      <span class="page-info"><span id="page-num">1</span> / <span id="page-count"></span></span>
-      <button onclick="nextPage()">Next ➡️</button>
-      <button onclick="zoomIn()">🔍 Zoom In</button>
-      <button onclick="zoomOut()">🔍 Zoom Out</button>
+  <div id="app-container">
+    <div id="controls">
+      <button onclick="prevPage()">Previous</button>
+      <span>Page <span id="current-page">1</span> of <span id="total-pages"></span></span>
+      <button onclick="nextPage()">Next</button>
+      <button onclick="zoomIn()">Zoom In</button>
+      <button onclick="zoomOut()">Zoom Out</button>
     </div>
-    <div class="pdf-container" id="pdfContainer">
-      <canvas id="pdfViewer"></canvas>
-      <div id="watermark" class="watermark"></div>
+    <div id="pdf-container">
+      <div id="canvas-container">
+        <canvas id="pdf-canvas"></canvas>
+        <div id="watermark-1" class="watermark"></div>
+        <div id="watermark-2" class="watermark"></div>
+        <div id="watermark-3" class="watermark"></div>
+      </div>
     </div>
-    <div class="protection-overlay" id="protectionOverlay"></div>
+    <div id="dynamic-overlay"></div>
   </div>
 
-  <script src="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
   <script>
-    // PDF viewer variables
-    const canvas = document.getElementById("pdfViewer");
-    const ctx = canvas.getContext("2d");
-    const pdfContainer = document.getElementById("pdfContainer");
-    const protectionOverlay = document.getElementById("protectionOverlay");
-    const watermark = document.getElementById("watermark");
+    // Configuration
+    const USER_ID = "USER_" + Math.floor(Math.random() * 10000);
+    const CURRENT_DATE = new Date().toLocaleString();
+    
+    // PDF.js setup
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+    
+    // DOM elements
+    const canvas = document.getElementById('pdf-canvas');
+    const ctx = canvas.getContext('2d');
+    const watermark1 = document.getElementById('watermark-1');
+    const watermark2 = document.getElementById('watermark-2');
+    const watermark3 = document.getElementById('watermark-3');
+    
+    // PDF state
+    let pdfDocument = null;
+    let currentPage = 1;
+    let currentScale = 1.5;
+    let isRendering = false;
+    let pageRenderingQueue = null;
+    
+    // Security measures
+    initSecurity();
+    
+    // Load PDF
+    pdfjsLib.getDocument('contekan-iklan.pdf').promise.then(pdf => {
+      pdfDocument = pdf;
+      document.getElementById('total-pages').textContent = pdf.numPages;
+      renderPage(currentPage);
+    });
 
-    let pdfDoc = null;
-    let pageNum = 1;
-    let pageRendering = false;
-    let pageNumPending = null;
-    let scale = 1.5;
-    let username = "User"; // You can set this dynamically
-
-    // Use local test PDF
-    const url = "contekan-iklan.pdf";
-
-    pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
-
-    // Initialize security measures
-    function initSecurity() {
-      // Disable various user interactions
-      document.addEventListener('contextmenu', preventAction, {capture: true});
-      document.addEventListener('selectstart', preventAction, {capture: true});
-      document.addEventListener('dragstart', preventAction, {capture: true});
+    function renderPage(pageNumber) {
+      isRendering = true;
       
-      // Monitor window focus and visibility
-      window.addEventListener('blur', handleBlur);
-      window.addEventListener('focus', handleFocus);
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      
-      // Add watermark
-      updateWatermark();
-      
-      // Make elements unselectable
-      canvas.style.userSelect = 'none';
-      canvas.style.webkitUserSelect = 'none';
-      canvas.style.webkitTouchCallout = 'none';
-      
-      // Detect screenshot attempts (where possible)
-      detectScreenshotAttempts();
-    }
-
-    function preventAction(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      return false;
-    }
-
-    function handleBlur() {
-      showProtectionOverlay();
-    }
-
-    function handleFocus() {
-      hideProtectionOverlay();
-      if (pdfDoc && !pageRendering) {
-        renderPage(pageNum);
-      }
-    }
-
-    function handleVisibilityChange() {
-      if (document.hidden) {
-        showProtectionOverlay();
-      } else {
-        hideProtectionOverlay();
-        if (pdfDoc && !pageRendering) {
-          renderPage(pageNum);
-        }
-      }
-    }
-
-    function showProtectionOverlay() {
-      protectionOverlay.style.display = 'block';
-    }
-
-    function hideProtectionOverlay() {
-      protectionOverlay.style.display = 'none';
-    }
-
-    function updateWatermark() {
-      const date = new Date();
-      watermark.textContent = `${username} • ${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
-      
-      // Position watermark randomly but ensure it's visible
-      const maxX = Math.max(100, pdfContainer.clientWidth - 400);
-      const maxY = Math.max(100, pdfContainer.clientHeight - 100);
-      watermark.style.left = `${50 + Math.random() * maxX}px`;
-      watermark.style.top = `${50 + Math.random() * maxY}px`;
-      
-      // Change watermark position periodically
-      setTimeout(updateWatermark, 30000);
-    }
-
-    function detectScreenshotAttempts() {
-      // For Android Chrome (where possible)
-      if (window.Notification && window.Notification.permission !== 'denied') {
-        window.Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            document.addEventListener('visibilitychange', () => {
-              if (document.hidden) {
-                new Notification('Protected Content', {
-                  body: 'Screenshots are not allowed for this content',
-                  icon: 'https://example.com/warning.png'
-                });
-              }
-            });
-          }
-        });
-      }
-      
-      // For desktop browsers
-      window.addEventListener('resize', checkForScreenshotTools);
-    }
-
-    function checkForScreenshotTools() {
-      // Check for common screenshot tool window sizes
-      const w = window.outerWidth - window.innerWidth;
-      const h = window.outerHeight - window.innerHeight;
-      
-      if (w > 100 || h > 100) {
-        showProtectionOverlay();
-        setTimeout(hideProtectionOverlay, 3000);
-      }
-    }
-
-    // PDF Rendering Functions
-    function renderPage(num) {
-      pageRendering = true;
-      hideProtectionOverlay();
-
-      pdfDoc.getPage(num).then(page => {
-        const viewport = page.getViewport({ scale });
-
+      pdfDocument.getPage(pageNumber).then(page => {
+        const viewport = page.getViewport({ scale: currentScale });
+        
+        // Set canvas dimensions
         canvas.height = viewport.height;
         canvas.width = viewport.width;
-
+        
+        // Render PDF page
         const renderContext = {
           canvasContext: ctx,
-          viewport
+          viewport: viewport
         };
-
+        
         page.render(renderContext).promise.then(() => {
-          pageRendering = false;
-          updateWatermark();
-          if (pageNumPending !== null) {
-            renderPage(pageNumPending);
-            pageNumPending = null;
+          isRendering = false;
+          updateWatermarks();
+          
+          if (pageRenderingQueue !== null) {
+            renderPage(pageRenderingQueue);
+            pageRenderingQueue = null;
           }
         });
-      }).catch(err => {
-        console.error("Failed to render page", err);
-        pageRendering = false;
       });
     }
 
-    function queueRenderPage(num) {
-      if (pageRendering) {
-        pageNumPending = num;
+    function queuePageRender(pageNumber) {
+      if (isRendering) {
+        pageRenderingQueue = pageNumber;
       } else {
-        renderPage(num);
+        renderPage(pageNumber);
       }
     }
 
     function nextPage() {
-      if (pageNum < pdfDoc.numPages) {
-        pageNum++;
-        document.getElementById("page-num").textContent = pageNum;
-        queueRenderPage(pageNum);
+      if (currentPage < pdfDocument.numPages) {
+        currentPage++;
+        document.getElementById('current-page').textContent = currentPage;
+        queuePageRender(currentPage);
       }
     }
 
     function prevPage() {
-      if (pageNum > 1) {
-        pageNum--;
-        document.getElementById("page-num").textContent = pageNum;
-        queueRenderPage(pageNum);
+      if (currentPage > 1) {
+        currentPage--;
+        document.getElementById('current-page').textContent = currentPage;
+        queuePageRender(currentPage);
       }
     }
 
     function zoomIn() {
-      scale += 0.25;
-      queueRenderPage(pageNum);
+      currentScale += 0.25;
+      queuePageRender(currentPage);
     }
 
     function zoomOut() {
-      if (scale > 0.5) {
-        scale -= 0.25;
-        queueRenderPage(pageNum);
+      if (currentScale > 0.5) {
+        currentScale -= 0.25;
+        queuePageRender(currentPage);
       }
     }
 
-    // Load PDF Document and initialize security
-    pdfjsLib.getDocument(url).promise.then(pdf => {
-      pdfDoc = pdf;
-      document.getElementById("page-count").textContent = pdf.numPages;
-      initSecurity();
-      renderPage(pageNum);
-    }).catch(err => {
-      console.error("Failed to load PDF:", err);
-    });
+    function updateWatermarks() {
+      const text1 = `CONFIDENTIAL - ${USER_ID}`;
+      const text2 = CURRENT_DATE;
+      const text3 = `DO NOT SHARE - ${window.location.hostname}`;
+      
+      positionWatermark(watermark1, text1, 30, 30);
+      positionWatermark(watermark2, text2, canvas.width - 200, canvas.height - 30);
+      positionWatermark(watermark3, text3, canvas.width/2, canvas.height/2);
+      
+      // Rotate watermarks randomly
+      watermark1.style.transform = `rotate(${Math.random() * 30 - 15}deg)`;
+      watermark2.style.transform = `rotate(${Math.random() * 30 - 15}deg)`;
+      watermark3.style.transform = `rotate(${Math.random() * 30 - 15}deg)`;
+    }
+
+    function positionWatermark(element, text, x, y) {
+      element.textContent = text;
+      element.style.left = `${x}px`;
+      element.style.top = `${y}px`;
+    }
+
+    function initSecurity() {
+      // Block right click and selection
+      document.addEventListener('contextmenu', e => e.preventDefault());
+      document.addEventListener('selectstart', e => e.preventDefault());
+      
+      // Monitor window focus
+      window.addEventListener('blur', () => {
+        document.body.style.backgroundColor = 'black';
+        setTimeout(() => {
+          if (document.hasFocus()) {
+            document.body.style.backgroundColor = '#111';
+          }
+        }, 1000);
+      });
+      
+      // Detect dev tools
+      const devtools = /./;
+      devtools.toString = function() {
+        document.body.innerHTML = '<h1>Developer tools are not allowed</h1>';
+        return '';
+      };
+      
+      // Dynamic overlay updates
+      setInterval(() => {
+        const overlay = document.getElementById('dynamic-overlay');
+        const angle = Math.random() * 360;
+        overlay.style.background = `
+          repeating-linear-gradient(
+            ${angle}deg,
+            rgba(255,255,255,0.03),
+            rgba(255,255,255,0.03) 1px,
+            transparent 1px,
+            transparent ${2 + Math.random() * 2}px
+          )
+        `;
+      }, 1000);
+      
+      // Move watermarks periodically
+      setInterval(updateWatermarks, 5000);
+      
+      // Detect screen recording (where possible)
+      if (window.matchMedia('(display-mode: standalone)').matches) {
+        document.addEventListener('visibilitychange', () => {
+          if (document.hidden) {
+            alert('Screen recording detected! This content is protected.');
+          }
+        });
+      }
+    }
   </script>
 </body>
 </html>
