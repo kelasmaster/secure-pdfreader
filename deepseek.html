@@ -1,39 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Secure PDF Reader</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Secure Deepseek PDF Reader</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 0;
-      padding: 20px;
-      background-color: #f5f5f5;
+      padding: 0;
+      background-color: #222;
       user-select: none;
       -webkit-user-select: none;
       -moz-user-select: none;
       -ms-user-select: none;
+      overflow: hidden;
     }
     .container {
-      max-width: 800px;
-      margin: 0 auto;
-      background: white;
-      padding: 20px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      border-radius: 5px;
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
     }
-    h1 {
-      text-align: center;
-      color: #333;
+    .pdf-container {
+      position: absolute;
+      top: 60px;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      overflow: auto;
+      background-color: #444;
     }
     .controls {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background-color: #333;
       display: flex;
       justify-content: center;
       align-items: center;
       gap: 10px;
-      margin: 20px 0;
-      flex-wrap: wrap;
+      z-index: 100;
     }
     button {
       padding: 8px 15px;
@@ -47,77 +56,71 @@
     button:hover {
       background: #3367d6;
     }
-    .pdf-canvas {
-      width: 100%;
-      border: 1px solid #ddd;
-      display: block;
-      margin: 0 auto;
-      background-color: #444;
-    }
-    #page-num {
+    .page-info {
+      color: white;
       font-weight: bold;
+      margin: 0 15px;
     }
-    .warning-overlay {
+    canvas {
+      display: block;
+      margin: 20px auto;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      background-color: white;
+    }
+    .protection-overlay {
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background-color: rgba(0,0,0,0.9);
-      color: white;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      z-index: 1000;
-      font-size: 24px;
-      text-align: center;
-    }
-    .warning-overlay button {
-      margin-top: 20px;
+      pointer-events: none;
+      z-index: 50;
+      background: repeating-linear-gradient(
+        0deg,
+        rgba(255,255,255,0.03),
+        rgba(255,255,255,0.03) 1px,
+        transparent 1px,
+        transparent 3px
+      );
     }
   </style>
 </head>
 <body>
-  <div class="warning-overlay" id="warningOverlay">
-    <div>⚠️ Security Alert ⚠️</div>
-    <div id="warningMessage" style="margin-top: 20px; font-size: 16px;"></div>
-    <button onclick="hideWarning()">I Understand</button>
-  </div>
-
   <div class="container">
-    <h1>Secure PDF Reader</h1>
     <div class="controls">
       <button onclick="prevPage()">⬅️ Prev</button>
-      <span id="page-num">1</span> / <span id="page-count"></span>
+      <span class="page-info"><span id="page-num">1</span> / <span id="page-count"></span></span>
       <button onclick="nextPage()">Next ➡️</button>
       <button onclick="zoomIn()">🔍 Zoom In</button>
       <button onclick="zoomOut()">🔍 Zoom Out</button>
     </div>
-    <canvas id="pdfViewer" class="pdf-canvas"></canvas>
+    <div class="pdf-container" id="pdfContainer">
+      <canvas id="pdfViewer"></canvas>
+    </div>
+    <div class="protection-overlay" id="protectionOverlay"></div>
   </div>
 
-  <!-- PDF.js Library -->
-  <script src="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.min.js"></script> 
+  <script src="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
   <script>
-    // Security variables
-    let securityCheckInterval;
-    let lastFocusTime = Date.now();
-    const SECURITY_CHECK_INTERVAL = 1000;
-    const MAX_INACTIVITY_TIME = 3000; // 3 seconds
-    
     // PDF viewer variables
     const canvas = document.getElementById("pdfViewer");
     const ctx = canvas.getContext("2d");
-    const warningOverlay = document.getElementById("warningOverlay");
-    const warningMessage = document.getElementById("warningMessage");
+    const pdfContainer = document.getElementById("pdfContainer");
+    const protectionOverlay = document.getElementById("protectionOverlay");
 
     let pdfDoc = null;
     let pageNum = 1;
     let pageRendering = false;
     let pageNumPending = null;
     let scale = 1.5;
-    let originalCanvasData = null;
+    let canvasUpdateInterval;
+    let lastRenderTime = 0;
+
+    // Security variables
+    let securityCheckInterval;
+    const SECURITY_CHECK_INTERVAL = 300;
+    const RENDER_INTERVAL = 100;
+    const MAX_INACTIVITY_TIME = 2000;
 
     // Use local test PDF
     const url = "contekan-iklan.pdf";
@@ -126,7 +129,7 @@
 
     // Initialize security measures
     function initSecurity() {
-      // Disable right click, text selection, etc.
+      // Disable various user interactions
       document.addEventListener('contextmenu', preventAction);
       document.addEventListener('selectstart', preventAction);
       document.addEventListener('dragstart', preventAction);
@@ -139,8 +142,17 @@
       // Start security checks
       securityCheckInterval = setInterval(performSecurityChecks, SECURITY_CHECK_INTERVAL);
       
-      // Store original canvas data for comparison
-      storeOriginalCanvas();
+      // Dynamic canvas updates to prevent static captures
+      canvasUpdateInterval = setInterval(updateCanvasProtection, RENDER_INTERVAL);
+      
+      // Make canvas unselectable
+      canvas.style.userSelect = 'none';
+      canvas.style.webkitUserSelect = 'none';
+      canvas.style.webkitTouchCallout = 'none';
+      
+      // Protection overlay updates
+      updateProtectionOverlay();
+      window.addEventListener('resize', updateProtectionOverlay);
     }
 
     function preventAction(e) {
@@ -149,84 +161,91 @@
     }
 
     function checkDevTools(e) {
-      // Detect F12, Ctrl+Shift+I, Ctrl+Shift+J, etc.
+      // Detect common dev tools shortcuts
       if (e.key === "F12" || 
-          (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "C")) {
+          (e.ctrlKey && e.shiftKey && (e.key === "I" || e.key === "J" || e.key === "C"))) {
         e.preventDefault();
-        showWarning("Developer tools are not allowed while viewing this document.");
+        obfuscateCanvas();
       }
     }
 
     function handleBlur() {
-      showWarning("Window focus lost. This may indicate an attempt to capture the screen.");
+      obfuscateCanvas();
     }
 
     function handleFocus() {
-      lastFocusTime = Date.now();
-      hideWarning();
+      if (pdfDoc && !pageRendering) {
+        renderPage(pageNum);
+      }
     }
 
     function performSecurityChecks() {
       // Check if window is still focused
       if (!document.hasFocus()) {
-        showWarning("Window is not focused. This may indicate an attempt to capture the screen.");
         obfuscateCanvas();
-      } else if (Date.now() - lastFocusTime > MAX_INACTIVITY_TIME) {
-        showWarning("Inactivity detected. This may indicate an attempt to capture the screen.");
-        obfuscateCanvas();
-      } else {
-        // Check if canvas has been modified (screenshot attempt)
-        checkCanvasIntegrity();
       }
-    }
-
-    function storeOriginalCanvas() {
-      // Store a copy of the original canvas data for comparison
-      originalCanvasData = canvas.toDataURL();
-    }
-
-    function checkCanvasIntegrity() {
-      try {
-        const currentData = canvas.toDataURL();
-        if (currentData !== originalCanvasData) {
-          showWarning("Canvas integrity check failed. Possible screenshot attempt detected.");
-          obfuscateCanvas();
+      
+      // Check if we need to re-render due to inactivity
+      if (Date.now() - lastRenderTime > MAX_INACTIVITY_TIME) {
+        if (pdfDoc && !pageRendering) {
+          renderPage(pageNum);
         }
-      } catch (e) {
-        console.error("Canvas check error:", e);
       }
+    }
+
+    function updateCanvasProtection() {
+      // This subtle modification makes static screenshots less useful
+      if (!pageRendering && ctx) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        
+        // Very slight pixel modification that's not visible to the eye
+        for (let i = 0; i < data.length; i += 128) {
+          data[i] = data[i] ^ 1; // Flip least significant bit
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+      }
+    }
+
+    function updateProtectionOverlay() {
+      // Create a dynamic pattern that interferes with screen recording
+      protectionOverlay.style.background = `
+        repeating-linear-gradient(
+          ${Math.random() * 360}deg,
+          rgba(255,255,255,${Math.random() * 0.03}),
+          rgba(255,255,255,${Math.random() * 0.03}) 1px,
+          transparent 1px,
+          transparent ${3 + Math.random() * 2}px
+      )`;
     }
 
     function obfuscateCanvas() {
-      // Fill canvas with random noise
+      if (!ctx) return;
+      
+      // Fill canvas with noise
       const imageData = ctx.createImageData(canvas.width, canvas.height);
       const data = imageData.data;
       for (let i = 0; i < data.length; i += 4) {
-        data[i] = Math.floor(Math.random() * 255);     // R
-        data[i + 1] = Math.floor(Math.random() * 255); // G
-        data[i + 2] = Math.floor(Math.random() * 255); // B
-        data[i + 3] = 255;                            // A
+        data[i] = Math.floor(Math.random() * 256);
+        data[i + 1] = Math.floor(Math.random() * 256);
+        data[i + 2] = Math.floor(Math.random() * 256);
+        data[i + 3] = 255;
       }
       ctx.putImageData(imageData, 0, 0);
-    }
-
-    function showWarning(message) {
-      warningMessage.textContent = message;
-      warningOverlay.style.display = "flex";
-    }
-
-    function hideWarning() {
-      warningOverlay.style.display = "none";
-      // Re-render the page if we're not in the middle of rendering
-      if (!pageRendering && pdfDoc) {
-        renderPage(pageNum);
-      }
+      
+      // Schedule a re-render
+      setTimeout(() => {
+        if (pdfDoc && !pageRendering) {
+          renderPage(pageNum);
+        }
+      }, 500);
     }
 
     // PDF Rendering Functions
     function renderPage(num) {
       pageRendering = true;
-      hideWarning();
+      lastRenderTime = Date.now();
 
       pdfDoc.getPage(num).then(page => {
         const viewport = page.getViewport({ scale });
@@ -241,8 +260,6 @@
 
         page.render(renderContext).promise.then(() => {
           pageRendering = false;
-          storeOriginalCanvas(); // Update the original canvas data after render
-          
           if (pageNumPending !== null) {
             renderPage(pageNumPending);
             pageNumPending = null;
@@ -250,7 +267,7 @@
         });
       }).catch(err => {
         console.error("Failed to render page", err);
-        showWarning("Error rendering PDF page.");
+        pageRendering = false;
       });
     }
 
@@ -279,29 +296,29 @@
     }
 
     function zoomIn() {
-      scale += 0.5;
+      scale += 0.25;
       queueRenderPage(pageNum);
     }
 
     function zoomOut() {
       if (scale > 0.5) {
-        scale -= 0.5;
+        scale -= 0.25;
         queueRenderPage(pageNum);
       }
     }
 
     // Load PDF Document and initialize security
-    console.log("Loading PDF...");
     pdfjsLib.getDocument(url).promise.then(pdf => {
-      console.log("PDF loaded successfully!", pdf);
       pdfDoc = pdf;
       document.getElementById("page-count").textContent = pdf.numPages;
       initSecurity();
       renderPage(pageNum);
     }).catch(err => {
       console.error("Failed to load PDF:", err);
-      showWarning("Could not load PDF. Check console for details.");
     });
+
+    // Periodically update protection overlay
+    setInterval(updateProtectionOverlay, 1000);
   </script>
 </body>
 </html>
