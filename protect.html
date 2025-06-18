@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Protected PDF Reader</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #222;
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      overflow: hidden;
+    }
+    .container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+    }
+    .pdf-container {
+      position: absolute;
+      top: 60px;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      overflow: auto;
+      background-color: #444;
+    }
+    .controls {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 60px;
+      background-color: #333;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
+      z-index: 100;
+    }
+    button {
+      padding: 8px 15px;
+      background: #4285f4;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    button:hover {
+      background: #3367d6;
+    }
+    .page-info {
+      color: white;
+      font-weight: bold;
+      margin: 0 15px;
+    }
+    canvas {
+      display: block;
+      margin: 20px auto;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      background-color: white;
+    }
+    .protection-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 50;
+      background: rgba(0,0,0,0.5);
+      display: none;
+    }
+    .watermark {
+      position: absolute;
+      color: white;
+      font-size: 24px;
+      opacity: 0.7;
+      pointer-events: none;
+      z-index: 60;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="controls">
+      <button onclick="prevPage()">⬅️ Prev</button>
+      <span class="page-info"><span id="page-num">1</span> / <span id="page-count"></span></span>
+      <button onclick="nextPage()">Next ➡️</button>
+      <button onclick="zoomIn()">🔍 Zoom In</button>
+      <button onclick="zoomOut()">🔍 Zoom Out</button>
+    </div>
+    <div class="pdf-container" id="pdfContainer">
+      <canvas id="pdfViewer"></canvas>
+      <div id="watermark" class="watermark"></div>
+    </div>
+    <div class="protection-overlay" id="protectionOverlay"></div>
+  </div>
+
+  <script src="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.min.js"></script>
+  <script>
+    // PDF viewer variables
+    const canvas = document.getElementById("pdfViewer");
+    const ctx = canvas.getContext("2d");
+    const pdfContainer = document.getElementById("pdfContainer");
+    const protectionOverlay = document.getElementById("protectionOverlay");
+    const watermark = document.getElementById("watermark");
+
+    let pdfDoc = null;
+    let pageNum = 1;
+    let pageRendering = false;
+    let pageNumPending = null;
+    let scale = 1.5;
+    let username = "User"; // You can set this dynamically
+
+    // Use local test PDF
+    const url = "contekan-iklan.pdf";
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
+
+    // Initialize security measures
+    function initSecurity() {
+      // Disable various user interactions
+      document.addEventListener('contextmenu', preventAction, {capture: true});
+      document.addEventListener('selectstart', preventAction, {capture: true});
+      document.addEventListener('dragstart', preventAction, {capture: true});
+      
+      // Monitor window focus and visibility
+      window.addEventListener('blur', handleBlur);
+      window.addEventListener('focus', handleFocus);
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      
+      // Add watermark
+      updateWatermark();
+      
+      // Make elements unselectable
+      canvas.style.userSelect = 'none';
+      canvas.style.webkitUserSelect = 'none';
+      canvas.style.webkitTouchCallout = 'none';
+      
+      // Detect screenshot attempts (where possible)
+      detectScreenshotAttempts();
+    }
+
+    function preventAction(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      return false;
+    }
+
+    function handleBlur() {
+      showProtectionOverlay();
+    }
+
+    function handleFocus() {
+      hideProtectionOverlay();
+      if (pdfDoc && !pageRendering) {
+        renderPage(pageNum);
+      }
+    }
+
+    function handleVisibilityChange() {
+      if (document.hidden) {
+        showProtectionOverlay();
+      } else {
+        hideProtectionOverlay();
+        if (pdfDoc && !pageRendering) {
+          renderPage(pageNum);
+        }
+      }
+    }
+
+    function showProtectionOverlay() {
+      protectionOverlay.style.display = 'block';
+    }
+
+    function hideProtectionOverlay() {
+      protectionOverlay.style.display = 'none';
+    }
+
+    function updateWatermark() {
+      const date = new Date();
+      watermark.textContent = `${username} • ${date.toLocaleDateString()} ${date.toLocaleTimeString()}`;
+      
+      // Position watermark randomly but ensure it's visible
+      const maxX = Math.max(100, pdfContainer.clientWidth - 400);
+      const maxY = Math.max(100, pdfContainer.clientHeight - 100);
+      watermark.style.left = `${50 + Math.random() * maxX}px`;
+      watermark.style.top = `${50 + Math.random() * maxY}px`;
+      
+      // Change watermark position periodically
+      setTimeout(updateWatermark, 30000);
+    }
+
+    function detectScreenshotAttempts() {
+      // For Android Chrome (where possible)
+      if (window.Notification && window.Notification.permission !== 'denied') {
+        window.Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            document.addEventListener('visibilitychange', () => {
+              if (document.hidden) {
+                new Notification('Protected Content', {
+                  body: 'Screenshots are not allowed for this content',
+                  icon: 'https://example.com/warning.png'
+                });
+              }
+            });
+          }
+        });
+      }
+      
+      // For desktop browsers
+      window.addEventListener('resize', checkForScreenshotTools);
+    }
+
+    function checkForScreenshotTools() {
+      // Check for common screenshot tool window sizes
+      const w = window.outerWidth - window.innerWidth;
+      const h = window.outerHeight - window.innerHeight;
+      
+      if (w > 100 || h > 100) {
+        showProtectionOverlay();
+        setTimeout(hideProtectionOverlay, 3000);
+      }
+    }
+
+    // PDF Rendering Functions
+    function renderPage(num) {
+      pageRendering = true;
+      hideProtectionOverlay();
+
+      pdfDoc.getPage(num).then(page => {
+        const viewport = page.getViewport({ scale });
+
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        const renderContext = {
+          canvasContext: ctx,
+          viewport
+        };
+
+        page.render(renderContext).promise.then(() => {
+          pageRendering = false;
+          updateWatermark();
+          if (pageNumPending !== null) {
+            renderPage(pageNumPending);
+            pageNumPending = null;
+          }
+        });
+      }).catch(err => {
+        console.error("Failed to render page", err);
+        pageRendering = false;
+      });
+    }
+
+    function queueRenderPage(num) {
+      if (pageRendering) {
+        pageNumPending = num;
+      } else {
+        renderPage(num);
+      }
+    }
+
+    function nextPage() {
+      if (pageNum < pdfDoc.numPages) {
+        pageNum++;
+        document.getElementById("page-num").textContent = pageNum;
+        queueRenderPage(pageNum);
+      }
+    }
+
+    function prevPage() {
+      if (pageNum > 1) {
+        pageNum--;
+        document.getElementById("page-num").textContent = pageNum;
+        queueRenderPage(pageNum);
+      }
+    }
+
+    function zoomIn() {
+      scale += 0.25;
+      queueRenderPage(pageNum);
+    }
+
+    function zoomOut() {
+      if (scale > 0.5) {
+        scale -= 0.25;
+        queueRenderPage(pageNum);
+      }
+    }
+
+    // Load PDF Document and initialize security
+    pdfjsLib.getDocument(url).promise.then(pdf => {
+      pdfDoc = pdf;
+      document.getElementById("page-count").textContent = pdf.numPages;
+      initSecurity();
+      renderPage(pageNum);
+    }).catch(err => {
+      console.error("Failed to load PDF:", err);
+    });
+  </script>
+</body>
+</html>
