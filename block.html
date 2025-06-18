@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Secure PDF Reader</title>
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    body {
+      user-select: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+    }
+    .watermark {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 24px;
+      color: rgba(255, 0, 0, 0.2);
+      pointer-events: none;
+      z-index: 10;
+      user-select: none;
+    }
+  </style>
+</head>
+<body oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
+  <div class="container">
+    <h1>Secure PDF Reader</h1>
+    <div class="controls">
+      <button onclick="prevPage()">⬅️ Prev</button>
+      <span id="page-num">1</span> / <span id="page-count"></span>
+      <button onclick="nextPage()">Next ➡️</button>
+      <button onclick="zoomIn()">🔍 Zoom In</button>
+      <button onclick="zoomOut()">🔍 Zoom Out</button>
+    </div>
+    <div style="position:relative; width:100%; overflow:hidden;">
+      <canvas id="pdfViewer" class="pdf-canvas" style="width:100%"></canvas>
+      <div class="watermark" id="watermark">Confidential - John Doe</div>
+    </div>
+  </div>
+
+  <!-- Local PDF.js Library -->
+  <script src="lib/pdf.min.js"></script>
+  <script>
+    // Prevent screenshot hotkeys
+    document.addEventListener('keydown', function(e) {
+      if (
+        (navigator.platform.match("Mac") ? e.metaKey : e.ctrlKey) &&
+        (e.key === 's' || e.key === 'p' || e.key === 'c')
+      ) {
+        e.preventDefault();
+      }
+
+      if (e.key === "PrintScreen") {
+        alert("Screenshot capture is discouraged.");
+        e.preventDefault();
+      }
+    });
+
+    // Optional: Move mouse cursor off canvas
+    const canvas = document.getElementById('pdfViewer');
+    canvas.style.cursor = "none";
+
+    // Optional: Hide cursor after delay
+    let hideCursorTimeout;
+    canvas.addEventListener("mousemove", () => {
+      canvas.style.cursor = "default";
+      clearTimeout(hideCursorTimeout);
+      hideCursorTimeout = setTimeout(() => {
+        canvas.style.cursor = "none";
+      }, 1000);
+    });
+  </script>
+  <script src="script.js"></script>
+</body>
+</html>
