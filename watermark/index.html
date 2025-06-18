@@ -137,7 +137,7 @@
     initSecurity();
     
     // Load PDF
-    pdfjsLib.getDocument('contekan-iklan.pdf').promise.then(pdf => {
+    pdfjsLib.getDocument('https://kelasmaster.github.io/secure-pdfreader/contekan-iklan.pdf').promise.then(pdf => {
       pdfDocument = pdf;
       document.getElementById('total-pages').textContent = pdf.numPages;
       renderPage(currentPage);
@@ -208,9 +208,9 @@
     }
 
     function updateWatermarks() {
-      const text1 = `CONFIDENTIAL - ${USER_ID}`;
+      const text1 = `eBOOK BIASA - ${USER_ID}`;
       const text2 = CURRENT_DATE;
-      const text3 = `DO NOT SHARE - ${window.location.hostname}`;
+      const text3 = `JANGAN DISALIN - ${window.location.hostname}`;
       
       positionWatermark(watermark1, text1, 30, 30);
       positionWatermark(watermark2, text2, canvas.width - 200, canvas.height - 30);
