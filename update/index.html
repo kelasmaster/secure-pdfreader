@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Secure PDF Reader</title>
+  <style>
+    body {
+      margin: 0;
+      background-color: #111;
+      color: white;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+    }
+
+    .container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+    }
+
+    .controls {
+      position: absolute;
+      top: 20px;
+      z-index: 100;
+    }
+
+    .controls button {
+      margin: 0 5px;
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    #pdfViewer {
+      max-width: 90%;
+      max-height: 80%;
+      border: 2px solid #444;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+    }
+  </style>
+</head>
+<body oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
+  <div class="container">
+    <h1>PDF Reader</h1>
+    <div class="controls">
+      <button onclick="prevPage()">⬅️ Prev</button>
+      <span id="page-num">1</span> / <span id="page-count"></span>
+      <button onclick="nextPage()">Next ➡️</button>
+      <button onclick="zoomIn()">🔍 Zoom In</button>
+      <button onclick="zoomOut()">🔍 Zoom Out</button>
+    </div>
+    <canvas id="pdfViewer"></canvas>
+  </div>
+
+  <!-- PDF.js Library -->
+  <script src="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.min.js"></script> 
+
+  <script>
+    const canvas = document.getElementById("pdfViewer");
+    const ctx = canvas.getContext("2d");
+
+    let pdfDoc = null;
+    let pageNum = 1;
+    let pageRendering = false;
+    let pageNumPending = null;
+    let scale = 1.5;
+
+    // Local PDF file
+    const url = "contekan-iklan.pdf";
+
+    // Set PDF.js worker source
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
+
+    function renderPage(num) {
+      pageRendering = true;
+
+      pdfDoc.getPage(num).then(page => {
+        const viewport = page.getViewport({ scale });
+
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        const renderContext = {
+          canvasContext: ctx,
+          viewport
+        };
+
+        page.render(renderContext);
+
+        pageRendering = false;
+        if (pageNumPending !== null) {
+          renderPage(pageNumPending);
+          pageNumPending = null;
+        }
+      }).catch(err => {
+        console.error("Failed to render page", err);
+        alert("Error rendering PDF page.");
+      });
+    }
+
+    function queueRenderPage(num) {
+      if (pageRendering) {
+        pageNumPending = num;
+      } else {
+        renderPage(num);
+      }
+    }
+
+    function nextPage() {
+      if (pageNum < pdfDoc.numPages) {
+        pageNum++;
+        queueRenderPage(pageNum);
+      }
+    }
+
+    function prevPage() {
+      if (pageNum > 1) {
+        pageNum--;
+        queueRenderPage(pageNum);
+      }
+    }
+
+    function zoomIn() {
+      scale += 0.5;
+      queueRenderPage(pageNum);
+    }
+
+    function zoomOut() {
+      if (scale > 0.5) {
+        scale -= 0.5;
+        queueRenderPage(pageNum);
+      }
+    }
+
+    // Load PDF Document
+    console.log("Loading PDF...");
+    pdfjsLib.getDocument(url).promise.then(pdf => {
+      console.log("🎉 PDF loaded successfully!", pdf);
+      pdfDoc = pdf;
+      document.getElementById("page-count").textContent = pdf.numPages;
+      renderPage(pageNum);
+    }).catch(err => {
+      console.error("🛑 Failed to load PDF:", err);
+      alert("Could not load PDF. Check console for details.");
+    });
+
+    // Prevent screenshot shortcuts
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && ['s', 'p', 'c'].includes(e.key.toLowerCase())) {
+        e.preventDefault();
+        alert("Copying, printing, or saving is disabled.");
+      }
+      if (e.key === "PrintScreen") {
+        e.preventDefault();
+        alert("Screenshot capture is discouraged.");
+      }
+    });
+
+    // Optional: Hide cursor after delay
+    let hideCursorTimeout;
+    canvas.addEventListener("mousemove", () => {
+      canvas.style.cursor = "default";
+      clearTimeout(hideCursorTimeout);
+      hideCursorTimeout = setTimeout(() => {
+        canvas.style.cursor = "none";
+      }, 1000);
+    });
+  </script>
+</body>
+</html>
