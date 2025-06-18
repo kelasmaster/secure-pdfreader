@@ -4,30 +4,67 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Secure PDF Reader</title>
-  <link rel="stylesheet" href="style.css" />
   <style>
     body {
+      margin: 0;
+      background-color: #111;
+      color: white;
       user-select: none;
       -webkit-user-select: none;
       -moz-user-select: none;
       -ms-user-select: none;
+      overflow: hidden;
     }
+
+    .container {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #111;
+    }
+
+    .controls {
+      position: absolute;
+      top: 20px;
+      z-index: 100;
+    }
+
+    .controls button {
+      margin: 0 5px;
+      padding: 8px 12px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    #pdfViewer {
+      max-width: 90%;
+      max-height: 80%;
+      border: 2px solid #444;
+      box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+    }
+
     .watermark {
       position: absolute;
       top: 50%;
       left: 50%;
-      transform: translate(-50%, -50%);
+      transform: translate(-50%, -50%) rotate(-30deg);
       font-size: 24px;
-      color: rgba(255, 0, 0, 0.2);
+      color: rgba(255, 255, 255, 0.15);
       pointer-events: none;
-      z-index: 10;
+      z-index: 99;
       user-select: none;
+      white-space: nowrap;
     }
   </style>
 </head>
 <body oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
   <div class="container">
-    <h1>Secure PDF Reader</h1>
+    <h1>Secure PDF Viewer</h1>
+
     <div class="controls">
       <button onclick="prevPage()">⬅️ Prev</button>
       <span id="page-num">1</span> / <span id="page-count"></span>
@@ -35,36 +72,33 @@
       <button onclick="zoomIn()">🔍 Zoom In</button>
       <button onclick="zoomOut()">🔍 Zoom Out</button>
     </div>
-    <div style="position:relative; width:100%; overflow:hidden;">
-      <canvas id="pdfViewer" class="pdf-canvas" style="width:100%"></canvas>
-      <div class="watermark" id="watermark">Confidential - John Doe</div>
-    </div>
+
+    <canvas id="pdfViewer"></canvas>
+    <div class="watermark" id="watermark">Confidential - John Doe • {{timestamp}}</div>
   </div>
 
   <!-- Local PDF.js Library -->
-  <script src="lib/pdf.min.js"></script>
-  <script>
-    // Prevent screenshot hotkeys
-    document.addEventListener('keydown', function(e) {
-      if (
-        (navigator.platform.match("Mac") ? e.metaKey : e.ctrlKey) &&
-        (e.key === 's' || e.key === 'p' || e.key === 'c')
-      ) {
-        e.preventDefault();
-      }
+  <script src="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.min.js"></script> 
 
-      if (e.key === "PrintScreen") {
-        alert("Screenshot capture is discouraged.");
+  <script>
+    // Disable common screenshot/screen recording shortcuts
+    document.addEventListener('keydown', function(e) {
+      if ((e.ctrlKey || e.metaKey) && ['s', 'p', 'c'].includes(e.key.toLowerCase())) {
         e.preventDefault();
+        alert("Copying, printing, or saving is disabled.");
+      }
+      if (e.key === "PrintScreen") {
+        e.preventDefault();
+        alert("Screenshot capture is discouraged.");
       }
     });
 
-    // Optional: Move mouse cursor off canvas
-    const canvas = document.getElementById('pdfViewer');
+    // Hide cursor after delay
+    const canvas = document.getElementById("pdfViewer");
+    let hideCursorTimeout;
+
     canvas.style.cursor = "none";
 
-    // Optional: Hide cursor after delay
-    let hideCursorTimeout;
     canvas.addEventListener("mousemove", () => {
       canvas.style.cursor = "default";
       clearTimeout(hideCursorTimeout);
@@ -72,7 +106,80 @@
         canvas.style.cursor = "none";
       }, 1000);
     });
+
+    // Watermark dynamic timestamp
+    const watermark = document.getElementById("watermark");
+    setInterval(() => {
+      const now = new Date();
+      watermark.textContent = `Confidential - John Doe • ${now.toLocaleTimeString()}`;
+    }, 1000);
+
+    // PDF.js rendering logic
+    const loadingTask = pdfjsLib.getDocument("your-document.pdf").promise;
+    let currentPage = 1;
+    let scale = 1.5;
+    let pdfDoc = null;
+
+    loadingTask.promise.then(pdf => {
+      pdfDoc = pdf;
+      document.getElementById("page-count").textContent = pdf.numPages;
+      renderPage(currentPage);
+    });
+
+    function renderPage(pageNumber) {
+      const page = pdfDoc.getPage(pageNumber).promise.then(page => {
+        const viewport = page.getViewport({ scale });
+        const canvas = document.getElementById("pdfViewer");
+        const context = canvas.getContext("2d");
+        canvas.height = viewport.height;
+        canvas.width = viewport.width;
+
+        const renderContext = {
+          canvasContext: context,
+          viewport: viewport
+        };
+
+        page.render(renderContext);
+      });
+    }
+
+    function nextPage() {
+      if (currentPage < pdfDoc.numPages) {
+        currentPage++;
+        document.getElementById("page-num").textContent = currentPage;
+        renderPage(currentPage);
+      }
+    }
+
+    function prevPage() {
+      if (currentPage > 1) {
+        currentPage--;
+        document.getElementById("page-num").textContent = currentPage;
+        renderPage(currentPage);
+      }
+    }
+
+    function zoomIn() {
+      scale += 0.2;
+      renderPage(currentPage);
+    }
+
+    function zoomOut() {
+      scale -= 0.2;
+      if (scale < 0.4) scale = 0.4;
+      renderPage(currentPage);
+    }
+
+    // Optional: Detect screen capture (limited browser support)
+    if ('getDisplayMedia' in navigator.mediaDevices) {
+      try {
+        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        stream.getTracks().forEach(track => track.stop());
+        alert("⚠️ Screen recording detected!");
+      } catch (err) {
+        console.log("No active screen capture.");
+      }
+    }
   </script>
-  <script src="script.js"></script>
 </body>
 </html>
