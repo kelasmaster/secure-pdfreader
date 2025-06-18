@@ -43,6 +43,21 @@
       border: 2px solid #444;
       box-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
     }
+
+    #overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0, 0, 0, 0.7);
+      color: red;
+      font-size: 24px;
+      font-weight: bold;
+      text-align: center;
+      padding-top: 20%;
+      z-index: 999;
+      display: none;
+    }
   </style>
 </head>
 <body oncontextmenu="return false" onselectstart="return false" ondragstart="return false">
@@ -58,6 +73,9 @@
     <canvas id="pdfViewer"></canvas>
   </div>
 
+  <!-- Overlay Warning -->
+  <div id="overlay">⚠️ Screen recording detected!</div>
+
   <!-- PDF.js Library -->
   <script src="https://unpkg.com/pdfjs-dist@3.4.120/build/pdf.min.js"></script> 
 
@@ -71,18 +89,15 @@
     let pageNumPending = null;
     let scale = 1.5;
 
-    // Local PDF file
     const url = "contekan-iklan.pdf";
+    const overlay = document.getElementById("overlay");
 
-    // Set PDF.js worker source
     pdfjsLib.GlobalWorkerOptions.workerSrc = "//cdn.jsdelivr.net/npm/pdfjs-dist@3.4.120/build/pdf.worker.min.js";
 
     function renderPage(num) {
       pageRendering = true;
-
       pdfDoc.getPage(num).then(page => {
         const viewport = page.getViewport({ scale });
-
         canvas.height = viewport.height;
         canvas.width = viewport.width;
 
@@ -139,15 +154,10 @@
     }
 
     // Load PDF Document
-    console.log("Loading PDF...");
     pdfjsLib.getDocument(url).promise.then(pdf => {
-      console.log("🎉 PDF loaded successfully!", pdf);
       pdfDoc = pdf;
       document.getElementById("page-count").textContent = pdf.numPages;
       renderPage(pageNum);
-    }).catch(err => {
-      console.error("🛑 Failed to load PDF:", err);
-      alert("Could not load PDF. Check console for details.");
     });
 
     // Disable common screenshot shortcuts
@@ -172,19 +182,20 @@
       }, 1000);
     });
 
-    // Optional: Detect screen capture (limited support)
-    async function detectScreenCapture() {
+    // Detect screen recording (limited support)
+    async function detectScreenRecording() {
       try {
+        overlay.style.display = "block";
         const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        alert("⚠️ Screen recording detected!");
         stream.getTracks().forEach(track => track.stop());
+        overlay.style.display = "none";
       } catch (err) {
-        // User denied or no capture active
+        overlay.style.display = "none";
       }
     }
 
     // Run detection every few seconds
-    setInterval(detectScreenCapture, 5000);
+    setInterval(detectScreenRecording, 5000);
   </script>
 </body>
 </html>
